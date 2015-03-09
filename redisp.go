@@ -71,8 +71,8 @@ func (pce PooledConnError) Error() string {
 // Creator is the function provided in a call to redisp.New for creating the net.Conns that populate the pool
 type Creator func() net.Conn
 
-// Pool defines the Core functionality in this package
-type Pool interface {
+// Pooler defines the Core functionality in this package
+type Pooler interface {
         // Get returns a net.Conn from the channel and blocks when there are none available
 	Get() net.Conn
         // Put accepts a net.Conn that is placed back on the channel as available
@@ -86,7 +86,7 @@ type Pool interface {
 	PDo(...string) (interface{}, error)
 }
 
-// New provides an implementation of redisp.Pool.
+// New provides an implementation of redisp.Pooler.
 // The limit sets the size of the channel.
 // The channel is pre-filled with limit amount of calls to c.
 // The retryDelay sets the maximum amount of time that PDo will wait before it's second attempt.
@@ -95,33 +95,33 @@ func New(limit int, c Creator, retryDelay time.Duration) *Pool {
 	for i := 0; i < limit; i++ {
 		ch <- c()
 	}
-	return &pool{
+	return &Pool{
 		creator:    c,
 		created:    ch,
 		retryDelay: retryDelay,
 	}
 }
 
-type pool struct {
+type Pool struct {
 	creator    Creator
 	created    chan net.Conn
 	retryDelay time.Duration
 }
 
-func (p *pool) Get() net.Conn {
+func (p *Pool) Get() net.Conn {
 	return <-p.created
 }
 
-func (p *pool) Put(c net.Conn) {
+func (p *Pool) Put(c net.Conn) {
 	p.created <- c
 }
 
-func (p *pool) Bad(c net.Conn) {
+func (p *Pool) Bad(c net.Conn) {
 	c.Close()
 	p.created <- p.creator()
 }
 
-func (p *pool) PDo(args ...string) (interface{}, error) {
+func (p *Pool) PDo(args ...string) (interface{}, error) {
 	c := p.Get()
 	v, err := redisb.Do(c, args...)
 	if _, isConnError := err.(redisb.ConnError); isConnError {
