@@ -1,5 +1,5 @@
 /*
-Redisp provides pooled connections to Redis and is built on top of redisb.
+Package redisp provides pooled connections to Redis and is built on top of redisb.
 
 The pool is implemented using channels, so requests for a connection from the pool will block until there is one available.
 
