@@ -90,7 +90,7 @@ type Pool interface {
 // The limit sets the size of the channel.
 // The channel is pre-filled with limit amount of calls to c.
 // The retryDelay sets the maximum amount of time that PDo will wait before it's second attempt.
-func New(limit int, c Creator, retryDelay time.Duration) Pool {
+func New(limit int, c Creator, retryDelay time.Duration) *Pool {
 	ch := make(chan net.Conn, limit)
 	for i := 0; i < limit; i++ {
 		ch <- c()
