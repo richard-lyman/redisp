@@ -5,7 +5,7 @@ The pool is implemented using channels, so requests for a connection from the po
 
 The PDo func wraps the Get, Put, redisb.Do, and Bad funcs.
 It will ask for a connection from Get, provide that connection and other args to redisb.Do, eventually calling Put to return the connection.
-In the case where the first attempt to call redisb.Do fails with a redisb.ConnError, PDo will return that first connection by calling Bad and then 
+In the case where the first attempt to call redisb.Do fails with a redisb.ConnError, PDo will return that first connection by calling Bad and then
 wait a random amount of time (no more than that specified when calling redisp.New) before asking the pool for a new
 connection to attempt to call redisb.Do a second time.
 If the second attempt to call redisb.Do also fails with a redisb.ConnError, then a redisp.PooledConnError is returned.
@@ -73,16 +73,18 @@ type Creator func() net.Conn
 
 // Pooler defines the Core functionality in this package
 type Pooler interface {
-        // Get returns a net.Conn from the channel and blocks when there are none available
+	Emtpy()
+	Fill()
+	// Get returns a net.Conn from the channel and blocks when there are none available
 	Get() net.Conn
-        // Put accepts a net.Conn that is placed back on the channel as available
+	// Put accepts a net.Conn that is placed back on the channel as available
 	Put(net.Conn)
-        // Bad calls Close on the given net.Conn and creates a new net.Conn that is then made available on the channel
+	// Bad calls Close on the given net.Conn and creates a new net.Conn that is then made available on the channel
 	Bad(net.Conn)
-        // PDo is a wrapper around calls to Get, Put, and redisb.Do
-        // If the first call to redisb.Do fails, PDo will wait a random amount of time (no more than that provided in the call to redisp.New) before attemping another call to redisb.Do on a new net.Conn
-        // If the second call fails, a redisp.PooledConnError will be returned
-        // redisp.Bad is used to handle a net.Conn associated with a redisb.ConnError from a call to redisb.Do.
+	// PDo is a wrapper around calls to Get, Put, and redisb.Do
+	// If the first call to redisb.Do fails, PDo will wait a random amount of time (no more than that provided in the call to redisp.New) before attemping another call to redisb.Do on a new net.Conn
+	// If the second call fails, a redisp.PooledConnError will be returned
+	// redisp.Bad is used to handle a net.Conn associated with a redisb.ConnError from a call to redisb.Do.
 	PDo(...string) (interface{}, error)
 }
 
@@ -90,22 +92,47 @@ type Pooler interface {
 // The limit sets the size of the channel.
 // The channel is pre-filled with limit amount of calls to c.
 // The retryDelay sets the maximum amount of time that PDo will wait before it's second attempt.
-func New(limit int, c Creator, retryDelay time.Duration) *Pool {
-	ch := make(chan net.Conn, limit)
-	for i := 0; i < limit; i++ {
-		ch <- c()
-	}
-	return &Pool{
+func New(limit int, c Creator, retryDelay time.Duration) *Pooler {
+	p := &Pool{
+		limit:      limit,
 		creator:    c,
-		created:    ch,
 		retryDelay: retryDelay,
 	}
+	p.Fill()
+	return p
 }
 
 type Pool struct {
+	limit      int
+	tracked    []netConn
 	creator    Creator
 	created    chan net.Conn
 	retryDelay time.Duration
+}
+
+func (p *Pool) Empty() {
+	for {
+		if len(p.created) == 0 {
+			break
+		}
+		<-p.created
+	}
+	for _, c := range p.tracked {
+		c.Close()
+	}
+	p.tracked = make([]net.Conn, p.limit)
+}
+
+func (p *Pool) Fill() {
+	ch := make(chan net.Conn, limit)
+	t := make([]net.Conn, limit)
+	for i := 0; i < limit; i++ {
+		tmp := c()
+		t = append(t, tmp)
+		ch <- tmp
+	}
+	p.tracked = make([]net.Conn, p.limit)
+	p.created = ch
 }
 
 func (p *Pool) Get() net.Conn {
