@@ -93,10 +93,10 @@ type Pooler interface {
 // The limit sets the size of the channel.
 // The channel is pre-filled with limit amount of calls to c.
 // The retryDelay sets the maximum amount of time that PDo will wait before it's second attempt.
-func New(limit int, c Creator, retryDelay time.Duration) *Pool {
+func New(limit int, creator Creator, retryDelay time.Duration) *Pool {
 	p := &Pool{
 		limit:      limit,
-		creator:    c,
+		creator:    creator,
 		retryDelay: retryDelay,
 	}
 	p.Fill()
@@ -128,7 +128,7 @@ func (p *Pool) Fill() {
 	ch := make(chan net.Conn, p.limit)
 	t := make([]net.Conn, p.limit)
 	for i := 0; i < p.limit; i++ {
-		tmp := c()
+		tmp := p.creator()
 		t = append(t, tmp)
 		ch <- tmp
 	}
