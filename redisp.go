@@ -133,7 +133,7 @@ func (p *Pool) Fill() {
 	for i := len(p.tracked); i < p.limit; i++ {
 		tmp := p.creator()
 		p.tracked = append(p.tracked, tmp)
-		ch <- tmp
+		p.created <- tmp
 	}
 }
 
