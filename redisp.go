@@ -104,7 +104,7 @@ func New(limit int, c Creator, retryDelay time.Duration) *Pooler {
 
 type Pool struct {
 	limit      int
-	tracked    []netConn
+	tracked    []net.Conn
 	creator    Creator
 	created    chan net.Conn
 	retryDelay time.Duration
