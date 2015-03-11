@@ -71,6 +71,7 @@ func (pce PooledConnError) Error() string {
 // Creator is the function provided in a call to redisp.New for creating the net.Conns that populate the pool
 type Creator func() net.Conn
 
+/*
 // Pooler defines the Core functionality in this package
 type Pooler interface {
 	Emtpy()
@@ -87,12 +88,12 @@ type Pooler interface {
 	// redisp.Bad is used to handle a net.Conn associated with a redisb.ConnError from a call to redisb.Do.
 	PDo(...string) (interface{}, error)
 }
+*/
 
-// New provides an implementation of redisp.Pooler.
 // The limit sets the size of the channel.
 // The channel is pre-filled with limit amount of calls to c.
 // The retryDelay sets the maximum amount of time that PDo will wait before it's second attempt.
-func New(limit int, c Creator, retryDelay time.Duration) Pooler {
+func New(limit int, c Creator, retryDelay time.Duration) *Pool {
 	p := &Pool{
 		limit:      limit,
 		creator:    c,
