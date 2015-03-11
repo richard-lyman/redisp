@@ -98,6 +98,8 @@ func New(limit int, creator Creator, retryDelay time.Duration) *Pool {
 		limit:      limit,
 		creator:    creator,
 		retryDelay: retryDelay,
+		tracked:    []net.Conn{},
+		created:    make(chan net.Conn, limit),
 	}
 	p.Fill()
 	return p
@@ -125,15 +127,14 @@ func (p *Pool) Empty() {
 }
 
 func (p *Pool) Fill() {
-	ch := make(chan net.Conn, p.limit)
-	t := make([]net.Conn, p.limit)
-	for i := 0; i < p.limit; i++ {
+	if len(p.tracked) == p.limit {
+		return
+	}
+	for i := len(p.tracked); i < p.limit; i++ {
 		tmp := p.creator()
-		t = append(t, tmp)
+		p.tracked = append(p.tracked, tmp)
 		ch <- tmp
 	}
-	p.tracked = make([]net.Conn, p.limit)
-	p.created = ch
 }
 
 func (p *Pool) Get() net.Conn {
