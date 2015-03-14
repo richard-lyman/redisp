@@ -113,8 +113,13 @@ type Pool struct {
 	retryDelay time.Duration
 }
 
+/*
+Empty will force a call to Close on all net.Conns and remove all available net.Conns from the pool.
+
+You will need to call Fill to unblock calls to Get.
+*/
 func (p *Pool) Empty() {
-	for {
+	for { // This will have problems for connections that aren't given back to the pool...
 		if len(p.created) == 0 {
 			break
 		}
@@ -126,6 +131,7 @@ func (p *Pool) Empty() {
 	p.tracked = make([]net.Conn, p.limit)
 }
 
+// Fill will add net.Conns to the pool by calling the Creator provided in New, until the number of net.Conns is equal to the limit given in New
 func (p *Pool) Fill() {
 	if len(p.tracked) == p.limit {
 		return
@@ -137,19 +143,27 @@ func (p *Pool) Fill() {
 	}
 }
 
+// Get takes one net.Conn off of the internal chan net.Conn - so it blocks if there are no available net.Conns
 func (p *Pool) Get() net.Conn {
 	return <-p.created
 }
 
+// Put returns a net.Conn to the internal chan net.Conn
 func (p *Pool) Put(c net.Conn) {
 	p.created <- c
 }
 
+// Bad calls Close on the net.Conn and then adds a new net.Conn to the internal chan net.Conn by calling the creator given in New
 func (p *Pool) Bad(c net.Conn) {
 	c.Close()
 	p.created <- p.creator()
 }
 
+/*
+PDo wraps the calls to Get, Bad, Put, and redisb.Do, with an internal second attempt to call redisb.Do if the first fails from a redisb.ConnError.
+
+The delay before the second attempt to call redisb.Do is based on a random time.Duration no greater than the retryDelay given in New.
+*/
 func (p *Pool) PDo(args ...string) (interface{}, error) {
 	c := p.Get()
 	v, err := redisb.Do(c, args...)
