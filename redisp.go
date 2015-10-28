@@ -119,15 +119,17 @@ Empty will force a call to Close on all net.Conns and remove all available net.C
 You will need to call Fill to unblock calls to Get.
 */
 func (p *Pool) Empty() {
-	for { // This will have problems for connections that aren't given back to the pool...
-		if len(p.created) == 0 {
-			break
+	go func(p *Pool) {
+		for {
+			if len(p.created) == 0 {
+				break
+			}
+			<-p.created
 		}
-		<-p.created
-	}
-	for _, c := range p.tracked {
-		c.Close()
-	}
+		for _, c := range p.tracked {
+			c.Close() // TODO - it might be nice to know that close was called on a Conn and block it from being re-added to the pool
+		}
+	}(p)
 	p.tracked = make([]net.Conn, p.limit)
 }
 
@@ -153,8 +155,18 @@ func (p *Pool) Put(c net.Conn) {
 	p.created <- c
 }
 
+func (p *Pool) removeFromTracked(c net.Conn) {
+	for i, v := range p.tracked {
+		if v == c {
+			p.tracked = append(p.tracked[:i], p.tracked[i+1:]...)
+			break
+		}
+	}
+}
+
 // Bad calls Close on the net.Conn and then adds a new net.Conn to the internal chan net.Conn by calling the creator given in New
 func (p *Pool) Bad(c net.Conn) {
+	p.removeFromTracked(c)
 	c.Close()
 	p.created <- p.creator()
 }
@@ -171,18 +183,20 @@ func (p *Pool) PDo(args ...string) (interface{}, error) {
 		n, err := rand.Int(rand.Reader, big.NewInt(p.retryDelay.Nanoseconds()))
 		if err != nil {
 			time.Sleep(p.retryDelay)
+		} else {
+			t, err := time.ParseDuration(fmt.Sprintf("%dns", n))
+			if err != nil {
+				time.Sleep(p.retryDelay)
+			} else {
+				time.Sleep(t)
+			}
 		}
-		t, err := time.ParseDuration(fmt.Sprintf("%dns", n))
-		if err != nil {
-			time.Sleep(p.retryDelay)
-		}
-		time.Sleep(t)
 		p.Bad(c)
 		c = p.Get()
 		v, err = redisb.Do(c, args...)
 		if _, isConnError := err.(redisb.ConnError); isConnError {
 			p.Bad(c)
-			return v, PooledConnError{err}
+			return nil, PooledConnError{err}
 		}
 		p.Put(c)
 		return v, err
